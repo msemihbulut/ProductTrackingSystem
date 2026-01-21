@@ -1,0 +1,219 @@
+﻿@model ProductTrackingSystem.Models.HomeViewModel
+
+@{
+    ViewData["Title"] = "Üretim Takip Sistemi";
+}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/tr.js"></script>
+
+<style>
+    .datetime-picker {
+        background-color: white !important;
+        cursor: pointer;
+    }
+</style>
+
+<div class="container mt-4">
+    <h2 class="text-center mb-4">Üretim Takip Sistemi</h2>
+
+    <form asp-action="Calculate" method="post" id="productionForm">
+
+        <div class="card mb-4">
+            <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Üretim Operasyon Bildirimleri</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-bordered table-striped mb-0">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th style="width: 80px;">Kayıt No</th>
+                            <th>Başlangıç</th>
+                            <th>Bitiş</th>
+                            <th>Durum</th>
+                            <th>Duruş Nedeni</th>
+                            <th style="width: 50px;">Sil</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inputTableBody">
+                        @for (int i = 0; i < Model.InputTable.Count; i++)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="record-id-display">@Model.InputTable[i].RecordId</span>
+                                    <input type="hidden" name="InputTable[@i].RecordId" value="@Model.InputTable[i].RecordId" class="record-id-input" />
+                                </td>
+                                <td>
+                                    <input type="text" name="InputTable[@i].StartTime" class="form-control datetime-picker"
+                                           value="@Model.InputTable[i].StartTime.ToString("yyyy-MM-dd HH:mm")" />
+                                </td>
+                                <td>
+                                    <input type="text" name="InputTable[@i].EndTime" class="form-control datetime-picker"
+                                           value="@Model.InputTable[i].EndTime.ToString("yyyy-MM-dd HH:mm")" />
+                                </td>
+                                <td>
+                                    <select name="InputTable[@i].Status" class="form-control"
+                                            asp-items="Html.GetEnumSelectList<ProductTrackingSystem.Models.ProductionStatus>()">
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" name="InputTable[@i].DowntimeReason" class="form-control" value="@Model.InputTable[i].DowntimeReason" />
+                                </td>
+                                <td>
+                                    @if (i > 0)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-danger remove-row">X</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer text-center">
+                <button type="button" class="btn btn-success" id="addRowBtn">
+                    <i class="fa fa-plus"></i> + Yeni Satır Ekle
+                </button>
+            </div>
+        </div>
+
+        <div class="text-center mb-4">
+            <button type="submit" class="btn btn-primary btn-lg px-5">Günlük Operasyon Bildirim Tablosunu Göster</button>
+        </div>
+
+    </form>
+
+    @if (Model.OutputTable != null && Model.OutputTable.Count > 0)
+    {
+        <div class="card mb-5">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Günlük Operasyon Bildirim Tablosu</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Kayıt No</th>
+                            <th>Başlangıç</th>
+                            <th>Bitiş</th>
+                            <th>Süre</th>
+                            <th>Durum</th>
+                            <th>Duruş Nedeni</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.OutputTable)
+                        {
+                            string rowClass = (item.Status == ProductTrackingSystem.Models.ProductionStatus.DURUS &&
+                            (item.DowntimeReason == "Çay Molası" || item.DowntimeReason == "Yemek Molası")) ? "table-warning" : "";
+
+                            <tr class="@rowClass">
+                                <td>@item.RecordId</td>
+                                <td>@item.StartTime.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@item.EndTime.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@item.Duration</td>
+                                <td>@item.Status</td>
+                                <td>@item.DowntimeReason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const tableBody = document.getElementById("inputTableBody");
+        const addBtn = document.getElementById("addRowBtn");
+
+        function initFlatpickr(selectorOrElement) {
+            flatpickr(selectorOrElement, {
+                enableTime: true,
+                dateFormat: "Y-m-d H:i",
+                altInput: true,         
+                altFormat: "d.m.Y H:i",
+                time_24hr: true,
+                locale: "tr",           
+                allowInput: true
+            });
+        }
+
+        initFlatpickr(".datetime-picker");
+
+        addBtn.addEventListener("click", function() {
+            const firstRow = tableBody.rows[0];
+            const newRow = firstRow.cloneNode(true);
+            const rowCount = tableBody.rows.length;
+            const inputs = newRow.querySelectorAll("input, select");
+
+            const datePickers = newRow.querySelectorAll(".flatpickr-input");
+            datePickers.forEach(dp => {
+                if(dp.type === "hidden" && dp.classList.contains("datetime-picker")) {
+                     dp.type = "text";
+                     dp.style.display = "block";
+                }
+            });
+
+            const mobileInputs = newRow.querySelectorAll(".form-control.input");
+            mobileInputs.forEach(mi => mi.remove());
+
+            inputs.forEach(input => {
+                if (input.classList.contains("flatpickr-mobile") || (input.readOnly && !input.classList.contains("datetime-picker"))) {
+                    input.remove();
+                    return;
+                }
+
+                if (input.name) {
+                    input.name = input.name.replace(/\[\d+\]/, `[${rowCount}]`);
+                }
+
+                if (input.classList.contains("datetime-picker")) {
+                } else if (input.type !== "hidden") {
+                    if(input.tagName === "SELECT") input.value = "0";
+                    else input.value = "";
+                }
+
+                input._flatpickr = undefined;
+            });
+
+            const nextRecordId = rowCount + 1;
+            newRow.querySelector(".record-id-display").textContent = nextRecordId;
+            newRow.querySelector(".record-id-input").value = nextRecordId;
+
+            let actionCell = newRow.cells[newRow.cells.length - 1];
+            actionCell.innerHTML = '<button type="button" class="btn btn-sm btn-danger remove-row">X</button>';
+
+            tableBody.appendChild(newRow);
+
+            const newDateInputs = newRow.querySelectorAll(".datetime-picker");
+            newDateInputs.forEach(el => initFlatpickr(el));
+        });
+
+        tableBody.addEventListener("click", function(e) {
+            if (e.target && e.target.classList.contains("remove-row")) {
+                const row = e.target.closest("tr");
+                if (tableBody.rows.length > 1) {
+                    row.remove();
+                    reindexRows();
+                }
+            }
+        });
+
+        function reindexRows() {
+            const rows = tableBody.rows;
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                row.querySelector(".record-id-display").textContent = (i + 1);
+                row.querySelector(".record-id-input").value = (i + 1);
+
+                const inputs = row.querySelectorAll("input[name], select[name]");
+                inputs.forEach(input => {
+                    input.name = input.name.replace(/\[\d+\]/, `[${i}]`);
+                });
+            }
+        }
+    });
+</script>
